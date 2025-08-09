@@ -10,7 +10,7 @@ def normalize_path(path):
 
 def collect_paths():
     targets = []
-    print("📂 请输入文件或文件夹路径（回车空行结束输入）：")
+    print("📂 请输入文件或文件夹路径（回车空行结束输入，不要跨盘）：")
     while True:
         path = input(">").strip()
         if not path:    # 无输入跳过
@@ -47,9 +47,68 @@ def collect_paths():
     return targets
 
 def get_files_in_directory(directory):
-    return [f for f in os.listdir(directory) 
-            if os.path.isfile(os.path.join(directory,f))]
+    return [files.name for files in os.scandir(directory) if files.is_file()]
 
+def confirm(prompt,default="y"):
+    choice = input(f"{prompt}(y/n,默认{default}:)").strip().lower()
+    if not choice:
+        choice = default
+    return (choice=="y")
+
+def preview_and_confirm(rename_map):
+    print("\n=== 预览重命名 ===")
+    for old,new in rename_map:
+        print(f"{old}->{new}")
+    return confirm("是否确认执行以上重命名？")
+
+def rename_preview(directory,base_name="File_",start_index=1,digits=3, sort_by_time=True):
+    files = get_files_in_directory(directory)
+    if sort_by_time:
+        files.sort(
+            key = lambda f:
+                os.path.getctime(os.path.join(directory,f))
+        )
+    else:
+        files.sort()
+        
+    print(f"共找到 {len(files)} 个文件，将进行重命名...")
+    
+    rename_map = []
+    history = []
+    index = start_index
+    for original_name in files:
+        ext = os.path.splitext(original_name)[1] # 获得文件后缀
+        while True:
+            new_name = f"{base_name}{str(index).zfill(digits)}{ext}"
+            dst = os.path.join(directory,new_name)
+            index += 1
+        
+            if os.path.exists(dst):
+                continue
+            else:
+                break
+        
+        rename_map.append((original_name, new_name))
+        history.append((new_name, original_name))
+    
+    if not preview_and_confirm(rename_map):
+        print("❌ 用户取消重命名。")
+        history.clear()
+    return history
+    
+def rollback(history,directory):
+    if not history:
+        print("⚠️ 没有可回退的记录。")
+        return
+    print("=== 回退重命名 ===")
+    for new,old in history:
+        src = os.path.join(directory,new)
+        dst = os.path.join(directory,old)
+        os.rename(src,dst)
+        print(f"↩️ {new} → {old}")
+    print("✅ 回退完成。")
+
+# 批量按格式重命名
 def rename_files_in_format(directory,base_name="File_",start_index=1,digits=3, sort_by_time=True):
     files = get_files_in_directory(directory)
     if sort_by_time:
@@ -59,23 +118,27 @@ def rename_files_in_format(directory,base_name="File_",start_index=1,digits=3, s
         )
     else:
         files.sort()
-
-    print(f"共找到 {len(files)} 个文件，将进行重命名...")
     
     index = start_index
     for original_name in files:
         ext = os.path.splitext(original_name)[1] # 获得文件后缀
-        new_name = f"{base_name}{str(index).zfill(digits)}{ext}"
-        src = os.path.join(directory,original_name)
-        dst = os.path.join(directory,new_name)
+        while True:
+            new_name = f"{base_name}{str(index).zfill(digits)}{ext}"
+            dst = os.path.join(directory,new_name)
         
-        if os.path.exists(dst):
-            print(f"⚠️ 已存在，跳过：{new_name}")
-        else:
-            os.rename(src,dst)
-            print(f"✅ {original_name} → {new_name}")
-            index +=1
+            if os.path.exists(dst):
+                print(f"⚠️ 已存在，跳过{new_name}")
+                index += 1
+                continue
             
+            else:
+                break
+            
+        src = os.path.join(directory,original_name)
+        os.rename(src,dst)
+        print(f"✅ {original_name} → {new_name}")
+        index += 1
+# 手动重命名文件
 def rename_files_in_sequence(directory, change_file_type=False):
     # 获得全部文件（文件夹除外）
     files = get_files_in_directory(directory)
@@ -100,7 +163,7 @@ def rename_files_in_sequence(directory, change_file_type=False):
         src = os.path.join(directory,original_name)
         os.rename(src,dst)
         print(f"✅ {original_name} → {new_file}")
-
+# 重命名单个文件
 def rename_single_file_or_folder(src, change_file_type=False):
     original_name = os.path.basename(src)
     dir = os.path.dirname(src)
@@ -149,7 +212,11 @@ def main():
         base_name = input("📝 请输入基础名称（默认 File_）：").strip() or "File_"
         start_index = get_int_input("🔢 请输入起始编号（默认 1）：", default=1)
         digits = get_int_input("0️⃣ 请输入编号位数（默认 3）：", default=3)
-        rename_files_in_format(directory, base_name, start_index, digits)
+        history = rename_preview(directory, base_name, start_index, digits)
+        if history:
+            rename_files_in_format(directory, base_name, start_index, digits)
+            if not confirm("是否保存重命名操作(y/n)",default="y"):
+                rollback(history, directory)
             
     elif(mode_choice==2):
         # 批量文件选择
@@ -172,7 +239,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-    
-    
     
