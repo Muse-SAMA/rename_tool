@@ -4,7 +4,7 @@
 import os
 import sys
 from rename_format import rename_preview, rename_files_in_format, confirm, rollback
-from rename_sequence import rename_single_file_or_folder, rename_files_in_sequence
+from rename_sequence import rename_single_file_or_folder_with_preview, rename_files_in_sequence_with_preview
 
 # 输入路径时自动去掉多余引号+转为绝对路径
 def normalize_path(path):
@@ -94,9 +94,9 @@ def main():
         
         for t in targets:
             if t["type"]=="file" or t["type"]=="folder":
-                rename_single_file_or_folder(t["path"])
+                rename_single_file_or_folder_with_preview(t["path"])
             elif t["type"]=="folder_files":
-                rename_files_in_sequence(t["path"])
+                rename_files_in_sequence_with_preview(t["path"])
         
     else:
         print("❌ 无效模式，程序退出。")
